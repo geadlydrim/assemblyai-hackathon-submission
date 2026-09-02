@@ -1,0 +1,36 @@
+# Plan / agent working files
+PLAN.md
+prompts/
+handoff/
+
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+.vercel
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Logs and debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+*.tsbuildinfo
+next-env.d.ts
+
+# Test / coverage
+coverage/
+.turbo
