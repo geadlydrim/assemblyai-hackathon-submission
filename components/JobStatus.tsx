@@ -20,7 +20,7 @@ export type {
 
 type JobStatusProps = {
   transcriptId: string;
-  /** Lifted completed/in-progress poll payload for T09. */
+  /** Lifted poll payload for MediaPreview (T09). */
   onTranscript?: (transcript: TranscriptPollResponse | null) => void;
 };
 

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 
 import { JobStatus, type TranscriptPollResponse } from "@/components/JobStatus";
+import { MediaPreview } from "@/components/MediaPreview";
 
 /** Common audio + video types accepted by T03 / AssemblyAI. */
 const ACCEPT = [
@@ -34,10 +35,11 @@ type TranscribeResponse = {
  * Home-page upload form. Posts `FormData` field `file` to `POST /api/transcribe`,
  * then mounts `JobStatus` to poll T04.
  *
- * T09: completed transcript lives in `transcript` (`transcript.utterances`).
- * Extend this file. Do not rewrite `app/page.tsx`. No video preview here.
+ * Keeps the picked `File` for `MediaPreview` (object URL + labelled VTT track).
+ * Do not rewrite `app/page.tsx`. No download buttons here (T10).
  */
 export function Uploader() {
+  const [file, setFile] = useState<File | null>(null);
   const [transcriptId, setTranscriptId] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<TranscriptPollResponse | null>(
     null,
@@ -45,19 +47,30 @@ export function Uploader() {
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const next = event.target.files?.[0];
+    const picked = next && next.size > 0 ? next : null;
+    setFile(picked);
+    setTranscriptId(null);
+    setTranscript(null);
+    setError(null);
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
-    const file = formData.get("file");
+    const uploaded = formData.get("file");
 
-    if (!(file instanceof File) || file.size === 0) {
+    if (!(uploaded instanceof File) || uploaded.size === 0) {
+      setFile(null);
       setTranscriptId(null);
       setTranscript(null);
       setError("Choose an audio or video file to upload.");
       return;
     }
 
+    setFile(uploaded);
     setIsUploading(true);
     setTranscriptId(null);
     setTranscript(null);
@@ -95,56 +108,69 @@ export function Uploader() {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="mt-10 w-full max-w-md"
-      aria-busy={
-        isUploading ||
-        (transcriptId !== null &&
-          transcript?.status !== "completed" &&
-          transcript?.status !== "error")
-      }
-    >
-      <label className="block text-sm font-medium" htmlFor="file">
-        Audio or video
-      </label>
-      <input
-        id="file"
-        name="file"
-        type="file"
-        accept={ACCEPT}
-        disabled={isUploading}
-        required
-        className="mt-2 block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-zinc-200 file:px-3 file:py-1.5 file:text-sm file:font-medium dark:file:bg-zinc-800"
-      />
-
-      <button
-        type="submit"
-        disabled={isUploading}
-        className="mt-4 w-full rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
+    <div className="mt-10 w-full max-w-2xl">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-md"
+        aria-busy={
+          isUploading ||
+          (transcriptId !== null &&
+            transcript?.status !== "completed" &&
+            transcript?.status !== "error")
+        }
       >
-        {isUploading ? "Uploading…" : "Generate subtitles"}
-      </button>
+        <label className="block text-sm font-medium" htmlFor="file">
+          Audio or video
+        </label>
+        <input
+          id="file"
+          name="file"
+          type="file"
+          accept={ACCEPT}
+          disabled={isUploading}
+          required
+          onChange={handleFileChange}
+          className="mt-2 block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-zinc-200 file:px-3 file:py-1.5 file:text-sm file:font-medium dark:file:bg-zinc-800"
+        />
 
-      {error ? (
-        <p className="mt-4 text-sm text-red-600 dark:text-red-400" role="alert">
-          {error}
-        </p>
-      ) : null}
+        <button
+          type="submit"
+          disabled={isUploading}
+          className="mt-4 w-full rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
+        >
+          {isUploading ? "Uploading…" : "Generate subtitles"}
+        </button>
 
-      {transcriptId ? (
-        <>
-          <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">
-            Transcript id:{" "}
-            <code className="break-all font-mono text-xs">{transcriptId}</code>
+        {error ? (
+          <p className="mt-4 text-sm text-red-600 dark:text-red-400" role="alert">
+            {error}
           </p>
-          <JobStatus
-            key={transcriptId}
-            transcriptId={transcriptId}
-            onTranscript={setTranscript}
-          />
-        </>
+        ) : null}
+
+        {transcriptId ? (
+          <>
+            <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">
+              Transcript id:{" "}
+              <code className="break-all font-mono text-xs">{transcriptId}</code>
+            </p>
+            <JobStatus
+              key={transcriptId}
+              transcriptId={transcriptId}
+              onTranscript={setTranscript}
+            />
+          </>
+        ) : null}
+      </form>
+
+      {file ? (
+        <MediaPreview
+          key={`${file.name}:${file.size}:${file.lastModified}`}
+          file={file}
+          transcriptId={transcriptId}
+          status={transcript?.status ?? null}
+          utterances={transcript?.utterances ?? null}
+        />
       ) : null}
-    </form>
+    </div>
   );
 }
