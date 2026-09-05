@@ -2,6 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 
+import { JobStatus, type TranscriptPollResponse } from "@/components/JobStatus";
+
 /** Common audio + video types accepted by T03 / AssemblyAI. */
 const ACCEPT = [
   "audio/*",
@@ -29,13 +31,17 @@ type TranscribeResponse = {
 };
 
 /**
- * Home-page upload form. Posts `FormData` field `file` to `POST /api/transcribe`.
+ * Home-page upload form. Posts `FormData` field `file` to `POST /api/transcribe`,
+ * then mounts `JobStatus` to poll T04.
  *
- * T08: extend this component. Poll `transcriptId` with `GET /api/transcripts/[id]`.
- * Do not rewrite `app/page.tsx`. Do not add polling here in T07.
+ * T09: completed transcript lives in `transcript` (`transcript.utterances`).
+ * Extend this file. Do not rewrite `app/page.tsx`. No video preview here.
  */
 export function Uploader() {
   const [transcriptId, setTranscriptId] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState<TranscriptPollResponse | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -47,12 +53,14 @@ export function Uploader() {
 
     if (!(file instanceof File) || file.size === 0) {
       setTranscriptId(null);
+      setTranscript(null);
       setError("Choose an audio or video file to upload.");
       return;
     }
 
     setIsUploading(true);
     setTranscriptId(null);
+    setTranscript(null);
     setError(null);
 
     try {
@@ -87,7 +95,16 @@ export function Uploader() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-10 w-full max-w-md">
+    <form
+      onSubmit={handleSubmit}
+      className="mt-10 w-full max-w-md"
+      aria-busy={
+        isUploading ||
+        (transcriptId !== null &&
+          transcript?.status !== "completed" &&
+          transcript?.status !== "error")
+      }
+    >
       <label className="block text-sm font-medium" htmlFor="file">
         Audio or video
       </label>
@@ -116,10 +133,17 @@ export function Uploader() {
       ) : null}
 
       {transcriptId ? (
-        <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">
-          Transcript id:{" "}
-          <code className="break-all font-mono text-xs">{transcriptId}</code>
-        </p>
+        <>
+          <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">
+            Transcript id:{" "}
+            <code className="break-all font-mono text-xs">{transcriptId}</code>
+          </p>
+          <JobStatus
+            key={transcriptId}
+            transcriptId={transcriptId}
+            onTranscript={setTranscript}
+          />
+        </>
       ) : null}
     </form>
   );
