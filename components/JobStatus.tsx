@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 
 import {
+  formatTranscriptionError,
+  processingCopy,
+  queuedCopy,
+} from "@/lib/downloads";
+import {
   POLL_INTERVAL_MS,
   resolvePollResponse,
   shouldStartPolling,
@@ -36,8 +41,8 @@ function statusClassName(status: TranscriptStatus | null): string {
 
 /**
  * Polls `GET /api/transcripts/{id}` every 3s until completed or error.
- * T09: completed `text` / `utterances` live in this component's state and are
- * also lifted to `Uploader` via `onTranscript`.
+ * Queued vs processing copy is distinct. Job failures are labelled as
+ * transcription errors (separate from upload / subtitle failures).
  */
 export function JobStatus({ transcriptId, onTranscript }: JobStatusProps) {
   const [status, setStatus] = useState<TranscriptStatus | null>(null);
@@ -115,7 +120,11 @@ export function JobStatus({ transcriptId, onTranscript }: JobStatusProps) {
             break;
           case "job_error":
             setStatus("error");
-            setJobError(outcome.transcript.error ?? "Transcription failed");
+            setJobError(
+              formatTranscriptionError(
+                outcome.transcript.error ?? "Transcription failed",
+              ),
+            );
             setPollError(null);
             onTranscript?.(outcome.transcript);
             break;
@@ -157,11 +166,17 @@ export function JobStatus({ transcriptId, onTranscript }: JobStatusProps) {
 
   const shownStatus = status ?? (pollError ? null : "queued");
   const transcriptBody = text?.trim() ? text : "(empty transcript)";
+  const inProgressCopy =
+    pollError || status === "completed" || status === "error"
+      ? null
+      : status === "processing"
+        ? processingCopy()
+        : queuedCopy();
 
   return (
     <section className="mt-6" aria-live="polite">
       {shownStatus ? (
-        <p className="text-sm">
+        <p className="text-sm text-zinc-800 dark:text-zinc-200">
           Status:{" "}
           <span className={`font-medium ${statusClassName(status)}`}>
             {shownStatus}
@@ -169,23 +184,21 @@ export function JobStatus({ transcriptId, onTranscript }: JobStatusProps) {
         </p>
       ) : null}
 
-      {status === "queued" || status === "processing" || status === null ? (
-        pollError ? null : (
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Transcribing… polling every 3 seconds.
-          </p>
-        )
+      {inProgressCopy ? (
+        <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+          {inProgressCopy}
+        </p>
       ) : null}
 
       {jobError ? (
-        <p className="mt-2 text-sm text-red-600 dark:text-red-400" role="alert">
+        <p className="mt-2 text-sm text-red-700 dark:text-red-400" role="alert">
           {jobError}
         </p>
       ) : null}
 
       {pollError && status !== "completed" && status !== "error" ? (
-        <p className="mt-2 text-sm text-red-600 dark:text-red-400" role="alert">
-          {pollError}
+        <p className="mt-2 text-sm text-red-700 dark:text-red-400" role="alert">
+          {formatTranscriptionError(pollError)}
         </p>
       ) : null}
 

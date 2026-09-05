@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test lib/subtitles.test.ts lib/poll-transcript.test.ts lib/media-preview.test.ts"
+    "test": "tsx --test lib/subtitles.test.ts lib/poll-transcript.test.ts lib/media-preview.test.ts lib/downloads.test.ts"
   },
   "dependencies": {
     "assemblyai": "^4.37.1",

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 
+import { formatSubtitleError } from "@/lib/downloads";
 import {
   activeCueIndex,
   cuesFromUtterances,
@@ -21,6 +22,7 @@ type MediaPreviewProps = {
   transcriptId: string | null;
   status: TranscriptStatus | null | undefined;
   utterances: TranscriptUtterance[] | null | undefined;
+  onSubtitleError?: (message: string | null) => void;
 };
 
 /**
@@ -36,6 +38,7 @@ export function MediaPreview({
   transcriptId,
   status,
   utterances,
+  onSubtitleError,
 }: MediaPreviewProps) {
   const video = isVideoFile(file);
   const vttSrc =
@@ -76,12 +79,14 @@ export function MediaPreview({
         }
         if (!response.ok) {
           setFetchedCues(cuesFromUtterances(utterances));
+          onSubtitleError?.(formatSubtitleError(response.status, body));
           return;
         }
         const parsed = parseVttCues(body);
         setFetchedCues(
           parsed.length > 0 ? parsed : cuesFromUtterances(utterances),
         );
+        onSubtitleError?.(null);
       } catch (caught) {
         if (cancelled) {
           return;
@@ -90,6 +95,12 @@ export function MediaPreview({
           return;
         }
         setFetchedCues(cuesFromUtterances(utterances));
+        onSubtitleError?.(
+          formatSubtitleError(
+            0,
+            caught instanceof Error ? caught.message : "Could not load captions.",
+          ),
+        );
       }
     };
 
@@ -99,7 +110,7 @@ export function MediaPreview({
       cancelled = true;
       controller.abort();
     };
-  }, [vttSrc, utterances]);
+  }, [vttSrc, utterances, onSubtitleError]);
 
   useEffect(() => {
     if (!video || !vttSrc) {
@@ -194,7 +205,7 @@ function CueList({
     <div className="mt-4">
       <h2 className="text-sm font-medium">Captions</h2>
       {cues.length === 0 ? (
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
           {waiting
             ? "Waiting for labelled captions…"
             : "Captions appear here after transcription completes."}

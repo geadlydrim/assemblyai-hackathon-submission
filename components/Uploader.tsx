@@ -2,8 +2,14 @@
 
 import { useState, type ChangeEvent, type FormEvent } from "react";
 
+import { DownloadBar } from "@/components/DownloadBar";
 import { JobStatus, type TranscriptPollResponse } from "@/components/JobStatus";
 import { MediaPreview } from "@/components/MediaPreview";
+import {
+  emptyStateCopy,
+  formatUploadError,
+  uploadingCopy,
+} from "@/lib/downloads";
 
 /** Common audio + video types accepted by T03 / AssemblyAI. */
 const ACCEPT = [
@@ -36,7 +42,7 @@ type TranscribeResponse = {
  * then mounts `JobStatus` to poll T04.
  *
  * Keeps the picked `File` for `MediaPreview` (object URL + labelled VTT track).
- * Do not rewrite `app/page.tsx`. No download buttons here (T10).
+ * `DownloadBar` is always visible and stays disabled until status is completed.
  */
 export function Uploader() {
   const [file, setFile] = useState<File | null>(null);
@@ -45,15 +51,21 @@ export function Uploader() {
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [subtitleError, setSubtitleError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  function resetJob() {
+    setTranscriptId(null);
+    setTranscript(null);
+    setError(null);
+    setSubtitleError(null);
+  }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const next = event.target.files?.[0];
     const picked = next && next.size > 0 ? next : null;
     setFile(picked);
-    setTranscriptId(null);
-    setTranscript(null);
-    setError(null);
+    resetJob();
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -64,17 +76,14 @@ export function Uploader() {
 
     if (!(uploaded instanceof File) || uploaded.size === 0) {
       setFile(null);
-      setTranscriptId(null);
-      setTranscript(null);
+      resetJob();
       setError("Choose an audio or video file to upload.");
       return;
     }
 
     setFile(uploaded);
     setIsUploading(true);
-    setTranscriptId(null);
-    setTranscript(null);
-    setError(null);
+    resetJob();
 
     try {
       const response = await fetch("/api/transcribe", {
@@ -90,28 +99,36 @@ export function Uploader() {
       }
 
       if (!response.ok) {
-        setError(data?.error ?? `Upload failed (${response.status}).`);
+        setError(
+          formatUploadError(data?.error ?? `Upload failed (${response.status}).`),
+        );
         return;
       }
 
       if (!data?.id) {
-        setError("The server did not return a transcript id.");
+        setError(formatUploadError("The server did not return a transcript id."));
         return;
       }
 
       setTranscriptId(data.id);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Upload failed.");
+      setError(
+        formatUploadError(
+          caught instanceof Error ? caught.message : "Upload failed.",
+        ),
+      );
     } finally {
       setIsUploading(false);
     }
   }
 
+  const showEmptyState = !file && !isUploading && !transcriptId;
+
   return (
-    <div className="mt-10 w-full max-w-2xl">
+    <div className="mt-8 w-full">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md"
+        className="w-full rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950"
         aria-busy={
           isUploading ||
           (transcriptId !== null &&
@@ -119,7 +136,10 @@ export function Uploader() {
             transcript?.status !== "error")
         }
       >
-        <label className="block text-sm font-medium" htmlFor="file">
+        <label
+          className="block text-sm font-medium text-zinc-900 dark:text-zinc-100"
+          htmlFor="file"
+        >
           Audio or video
         </label>
         <input
@@ -130,7 +150,7 @@ export function Uploader() {
           disabled={isUploading}
           required
           onChange={handleFileChange}
-          className="mt-2 block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-zinc-200 file:px-3 file:py-1.5 file:text-sm file:font-medium dark:file:bg-zinc-800"
+          className="mt-2 block w-full text-sm text-zinc-800 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-200 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-900 dark:text-zinc-200 dark:file:bg-zinc-800 dark:file:text-zinc-100"
         />
 
         <button
@@ -141,15 +161,33 @@ export function Uploader() {
           {isUploading ? "Uploading…" : "Generate subtitles"}
         </button>
 
+        {showEmptyState ? (
+          <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">
+            {emptyStateCopy()}
+          </p>
+        ) : null}
+
+        {file ? (
+          <p className="mt-4 text-sm text-zinc-800 dark:text-zinc-200">
+            Selected: <span className="font-medium">{file.name}</span>
+          </p>
+        ) : null}
+
+        {isUploading ? (
+          <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">
+            {uploadingCopy()}
+          </p>
+        ) : null}
+
         {error ? (
-          <p className="mt-4 text-sm text-red-600 dark:text-red-400" role="alert">
+          <p className="mt-4 text-sm text-red-700 dark:text-red-400" role="alert">
             {error}
           </p>
         ) : null}
 
         {transcriptId ? (
           <>
-            <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">
+            <p className="mt-4 text-sm text-zinc-800 dark:text-zinc-200">
               Transcript id:{" "}
               <code className="break-all font-mono text-xs">{transcriptId}</code>
             </p>
@@ -160,6 +198,12 @@ export function Uploader() {
             />
           </>
         ) : null}
+
+        <DownloadBar
+          transcriptId={transcriptId}
+          status={transcript?.status ?? null}
+          subtitleError={subtitleError}
+        />
       </form>
 
       {file ? (
@@ -169,6 +213,7 @@ export function Uploader() {
           transcriptId={transcriptId}
           status={transcript?.status ?? null}
           utterances={transcript?.utterances ?? null}
+          onSubtitleError={setSubtitleError}
         />
       ) : null}
     </div>
